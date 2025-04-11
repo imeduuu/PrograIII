@@ -26,6 +26,11 @@ def crear_personaje(personaje: schemas.PersonajeCreate, db: Session = Depends(ge
     colas[nuevo.id] = ColaDeMisiones()  
     return nuevo
 
+@app.get("/personajes", response_model=list[schemas.PersonajeOut])
+def listar_personajes(db: Session = Depends(get_db)):
+    return db.query(models.Personaje).all()
+
+
 @app.post("/misiones", response_model=schemas.MisionOut)
 def crear_mision(mision: schemas.MisionCreate, db: Session = Depends(get_db)):
     nueva = models.Mision(**mision.dict())
@@ -92,3 +97,6 @@ def listar_misiones(personaje_id: int, db: Session = Depends(get_db)):
 
     return [relacion.mision for relacion in relaciones]
 
+@app.get("/misiones", response_model=list[schemas.MisionOut])
+def listar_misiones(db: Session = Depends(get_db)):
+    return db.query(models.Mision).all()
