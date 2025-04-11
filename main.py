@@ -23,7 +23,7 @@ def crear_personaje(personaje: schemas.PersonajeCreate, db: Session = Depends(ge
     db.add(nuevo)
     db.commit()
     db.refresh(nuevo)
-    colas[nuevo.id] = ColaDeMisiones()  # Inicializar su cola
+    colas[nuevo.id] = ColaDeMisiones()  
     return nuevo
 
 @app.post("/misiones", response_model=schemas.MisionOut)
@@ -41,43 +41,54 @@ def aceptar_mision(personaje_id: int, mision_id: int, db: Session = Depends(get_
     if not personaje or not mision:
         raise HTTPException(status_code=404, detail="Personaje o misión no encontrada")
 
-    personaje.misiones.append(mision)
+    orden_actual = db.query(models.PersonajeMision)\
+        .filter_by(personaje_id=personaje_id)\
+        .count()
+
+    relacion = models.PersonajeMision(
+        personaje_id=personaje_id,
+        mision_id=mision_id,
+        orden=orden_actual
+    )
+    db.add(relacion)
     db.commit()
 
-    if personaje.id not in colas:
-        colas[personaje.id] = ColaDeMisiones()
-    colas[personaje.id].enqueue(mision.id)
-
     return {"mensaje": f"Misión '{mision.descripcion}' aceptada por {personaje.nombre}"}
+
 
 @app.post("/personajes/{personaje_id}/completar")
 def completar_mision(personaje_id: int, db: Session = Depends(get_db)):
     personaje = db.query(models.Personaje).get(personaje_id)
     if not personaje:
         raise HTTPException(status_code=404, detail="Personaje no encontrado")
-    
-    cola = colas.get(personaje.id)
-    if not cola or cola.is_empty():
+
+    relacion = db.query(models.PersonajeMision)\
+        .filter_by(personaje_id=personaje_id)\
+        .order_by(models.PersonajeMision.orden.asc())\
+        .first()
+
+    if not relacion:
         raise HTTPException(status_code=400, detail="No hay misiones por completar")
-    
-    id_mision = cola.dequeue()
-    mision = db.query(models.Mision).get(id_mision)
+
+    mision = relacion.mision
     personaje.xp += mision.xp
-    personaje.misiones.remove(mision)
+
+    db.delete(relacion)
     db.commit()
 
     return {"mensaje": f"{personaje.nombre} completó '{mision.descripcion}' y ganó {mision.xp} XP"}
+
 
 @app.get("/personajes/{personaje_id}/misiones", response_model=list[schemas.MisionOut])
 def listar_misiones(personaje_id: int, db: Session = Depends(get_db)):
     personaje = db.query(models.Personaje).get(personaje_id)
     if not personaje:
         raise HTTPException(status_code=404, detail="Personaje no encontrado")
-    
-    cola = colas.get(personaje.id)
-    if not cola:
-        return []
 
-    ids = cola.items
-    misiones = db.query(models.Mision).filter(models.Mision.id.in_(ids)).all()
-    return sorted(misiones, key=lambda m: ids.index(m.id))
+    relaciones = db.query(models.PersonajeMision)\
+        .filter_by(personaje_id=personaje_id)\
+        .order_by(models.PersonajeMision.orden.asc())\
+        .all()
+
+    return [relacion.mision for relacion in relaciones]
+

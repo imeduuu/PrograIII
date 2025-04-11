@@ -12,7 +12,7 @@ class MisionOut(MisionBase):
     id: int
 
     class Config:
-        orm_mode = True
+        from_attributes = True  
 
 class PersonajeBase(BaseModel):
     nombre: str
@@ -26,4 +26,4 @@ class PersonajeOut(PersonajeBase):
     misiones: List[MisionOut] = []
 
     class Config:
-        orm_mode = True
+        from_attributes = True 
